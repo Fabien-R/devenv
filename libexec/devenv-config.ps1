@@ -1,8 +1,6 @@
 # Usage: devenv config [options]
 # Summary: Devenv configuration management
 # Help:
-# devenv config --install --url <git-url> --name <config-name>
-# devenv config --remove --name <config-name>
 # devenv config --apply --name <config-name>
 # devenv config --update --name <config-name>
 # devenv config --list
@@ -11,9 +9,11 @@
 
 . "$( scoop prefix scoop )\lib\getopt.ps1"
 
-$opt, $args, $err = getopt $args "" @('apply', 'update', 'remove', 'install', 'list', 'url=', 'name=', 'branch=')
+$opt, $args, $err = getopt $args "" @('apply', 'update', 'list', 'url=', 'name=', 'branch=')
 
 $scoopTarget = $env:SCOOP
+
+function is_conf_bucket($bucket) {return Test-Path -path "$scoopTarget\buckets\$bucket\config"}
 
 if ($err) {
     LogMessage "devenv config: $err"; exit 1
@@ -21,9 +21,12 @@ if ($err) {
     if (!$opt.ContainsKey('name')) {
         Write-Host "devenv config --apply: --name is mandatory"; exit 1
     }
-     #load API
-     . "$PSScriptRoot\..\API\configAPI.ps1"
-     . "$PSScriptRoot\..\config\$( $opt.name )\apply.ps1" "install"
+    if (!(scoop bucket list).Contains($opt.name) -or !(is_conf_bucket $opt.name)) {
+        Write-Host "<bucket> do not contains configuration"; exit 1
+    }
+    #load API
+    . "$PSScriptRoot\..\API\configAPI.ps1"
+    . "$scoopTarget\buckets\$( $opt.name )\config\apply.ps1" "install"
 }
 elseif ($opt.update) {
     if (!$opt.ContainsKey('name'))
@@ -32,67 +35,16 @@ elseif ($opt.update) {
     }
     #load API
     . "$PSScriptRoot\..\API\configAPI.ps1"
-    . "$PSScriptRoot\..\config\$( $opt.name )\apply.ps1" "update"
+    . "$scoopTarget\buckets\$( $opt.name )\config\apply.ps1" "update"
 }
 elseif ($opt.list){
-     Write-Host "List all devenv configuration by names: "
-     $Folders = Get-ChildItem "$scoopTarget\persist\devenv\config\" -Directory -Name
-      foreach($Folder in $Folders)
-      {
-         $Folder = Split-Path -Path $Folder -Leaf
-         Write-Host $Folder
-      }
-} elseif ($opt['remove']) {
-    if (!$opt.ContainsKey('name')) {
-        Write-Host "devenv config --remove: --name is mandatory"; exit 1
-    }
-    if (Test-Path -LiteralPath "$scoopTarget\persist\devenv\config\$( $opt.name )") {
-        Write-Host "Removing configuration '$($opt.name)'"
-        Write-Host ""
-        Write-Host "Are you sure to delete configuration $( $opt.name ) ?"
-        $choices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
-        $choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
-        $choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
-
-        $decision = $Host.UI.PromptForChoice($message, $question, $choices, 1)
-        if ($decision -ne 0) {
-            Write-Host 'Cancelled'
-            return
-        }
-        Remove-Item "$scoopTarget\persist\devenv\config\$( $opt.name )" -Force -Recurse
-    } else {
-        Write-Host "No configuration with name '$($opt.name)' exit. Use devenv config --list."
-    }
-} elseif ($opt.install) {
-    if (!$opt.ContainsKey('url')) {
-        Write-Host "devenv config --install: --url is mandatory"; exit 1
-    } elseif (!$opt.ContainsKey('name')) {
-        Write-Host "devenv config --install: --name is mandatory"; exit 1
-    }
-    Write-Host "Installing a configuration from repo: " + $opt.url + " as " + $opt.name + " configuration."
-    Write-Host ""
-
-    if (Test-Path -LiteralPath "$scoopTarget\persist\devenv\config\$( $opt.name )") {
-        Write-Host "Configuration $( $opt.name ) already exist, would you like to override it ?"
-        $choices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
-        $choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
-        $choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
-
-        $decision = $Host.UI.PromptForChoice($message, $question, $choices, 1)
-        if ($decision -ne 0) {
-            Write-Host 'Cancelled'
-            return
-        }
-        Remove-Item "$scoopTarget\persist\devenv\config\$( $opt.name )" -Force -Recurse
-    }
-
-    Write-Host ""
-    git clone $opt.url "$scoopTarget\persist\devenv\config\$( $opt.name )"
-    if ($opt.ContainsKey('branch')) {
-        Push-Location "$scoopTarget\persist\devenv\config\$( $opt.name )"
-        git checkout "$scoopPersistBranch"
-        Pop-Location
-    }
+    Write-Host "List all buckets configuration by names: "
+     foreach ($bucket in scoop bucket list)
+     {
+         if (is_conf_bucket $bucket) {
+             Write-Host $bucket
+         }
+     }
 } else {
     . "$PSScriptRoot\..\libexec\devenv-help.ps1" $cmd
 }
