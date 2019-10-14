@@ -7,12 +7,16 @@ $scoopRootDir = scoop prefix scoop
 . "$scoopRootDir\lib\manifest.ps1"
 . "$scoopRootDir\lib\versions.ps1"
 . "$scoopRootDir\lib\install.ps1"
+. "$scoopRootDir\lib\git.ps1"
+
+$scoopTarget = $env:SCOOP
 
 Function ApplyConfigurationFile([String]$ScoopConfig, [String]$extrasPath, [String]$cmd)
 {
     $scoopConf = ConvertFrom-Json $ScoopConfig
 
-    if ($cmd -eq "install") {
+    if ($cmd -eq "install")
+    {
         foreach ($bucketSpec in $scoopConf.buckets)
         {
             if ($bucketSpec -ne "" -and !($bucketSpec -like "#*"))
@@ -32,6 +36,13 @@ Function ApplyConfigurationFile([String]$ScoopConfig, [String]$extrasPath, [Stri
     if ($cmd -eq "update")
     {
         scoop update
+        foreach ($bucketSpec in $scoopConf.buckets)
+        {
+            if ($bucketSpec -ne "" -and !($bucketSpec -like "#*"))
+            {
+                UpdateScoopBuckets $bucketSpec
+            }
+        }
         foreach ($appSpec in $scoopConf.apps)
         {
             if ($appSpec -ne "" -and !($appSpec -like "#*"))
@@ -44,10 +55,10 @@ Function ApplyConfigurationFile([String]$ScoopConfig, [String]$extrasPath, [Stri
 
 Function InstallScoopBuckets($bucketSpec)
 {
-    if ($bucketSpec -match "^([^@]+)(@(.+))?$")
+    if ($bucketSpec -match "^(?<name>[^@]+)?(@(?<url>[^@]+)?(@(?<version>[^@]+))?$)?$")
     {
-        $bucketName = $Matches[1]
-        $bucketRepo = $Matches[3]
+        LogInfo "$matches['name'], $matches['url'], $matches['version']"
+        $bucketName, $bucketRepo, $bucketVersion = $matches['name'], $matches['url'], $matches['version']
 
         $dir = Find-BucketDirectory $bucketName -Root
         if (Test-Path -LiteralPath $dir)
@@ -58,6 +69,43 @@ Function InstallScoopBuckets($bucketSpec)
         {
             ExecuteScript "Add scoop bucket '$bucketSpec'" {
                 scoop bucket add $bucketName $bucketRepo
+                Push-Location "$scoopTarget/buckets/$bucketName"
+                git_checkout "tags/$bucketVersion"
+                Pop-Location
+            }
+        }
+        return $bucketName
+    }
+    else
+    {
+        LogWarn "Invalid bucket : $bucketSpec"
+    }
+}
+
+Function UpdateScoopBuckets($bucketSpec)
+{
+    if ($bucketSpec -match "^(?<name>[^@]+)?(@(?<url>[^@]+)?(@(?<version>[^@]+))?$)?$")
+    {
+        LogInfo "$matches['name'], $matches['url'], $matches['version']"
+        $bucketName, $bucketRepo, $bucketVersion = $matches['name'], $matches['url'], $matches['version']
+
+        $dir = Find-BucketDirectory $bucketName -Root
+        if (Test-Path -LiteralPath $dir)
+        {
+            ExecuteScript "Update scoop bucket '$bucketSpec'" {
+                Push-Location "$scoopTarget/buckets/$bucketName"
+                git_fetch --tags
+                git_checkout "tags/$bucketVersion"
+                Pop-Location
+            }
+        }
+        else
+        {
+            ExecuteScript "Add scoop bucket '$bucketSpec'" {
+                scoop bucket add $bucketName $bucketRepo
+                Push-Location "$scoopTarget/buckets/$bucketName"
+                git_checkout "tags/$bucketVersion"
+                Pop-Location
             }
         }
         return $bucketName
@@ -119,31 +167,33 @@ Function UpdateScoopApps($appSpec, [String]$extrasPath)
     if ($appSpec -match '(?:(?<bucket>[a-zA-Z0-9-]+)\/)?(?<app>.*.json$|[a-zA-Z0-9-_.]+)(?:@(?<version>.*))?')
     {
         $appName, $appVersion, $appBucket = $matches['app'], $matches['version'], $matches['bucket']
+        LogInfo "Check '$appBucket / $appName v $version'."
         if (!$appBucket)
         {
             $appBucket = "main"
         }
-        if (installed $appName)
+        # check configuration file
+        $old_version = current_version $appName $false
+        $version = latest_version $appName $appBucket
+        if ($old_version -eq $version)
         {
-            # check configuration file
-            $old_version = current_version $appName $false
-            $version = latest_version $appName $appBucket
-            if ($old_version -eq $version)
+            LogInfo "The latest version of '$appName' ($version) is already installed."
+        }
+        elseif (!$old_version)
+        {
+            m_installApp $extrasPath $appName $appBucket
+        }
+        else
+        {
+            LogInfo "New version of '$appName' ($version)."
+            if (Test-Path -path $extrasPath/$appName/extra.psm1)
             {
-                LogInfo "The latest version of '$appName' ($version) is already installed."
+                m_updateApp $extrasPath $appName $appBucket
             }
             else
             {
-                if (Test-Path -path $extrasPath/$appName/extra.psm1)
-                {
-                    m_updateApp $extrasPath $appName $appBucket
-                }
-                else
-                {
-                    scoop update $appBucket/$appSpec
-                }
+                scoop update $appBucket/$appSpec
             }
-
         }
     }
     else
@@ -177,7 +227,9 @@ function m_AddBucketName($appName, $appBucket)
     if (Get-Member -inputobject $install_json -name "Property" -Membertype Properties)
     {
         $install_json | Set-ItemProperty -Name 'bucket' -Value $appBucket
-    } else {
+    }
+    else
+    {
         $install_json | Add-Member -Type NoteProperty -Name 'bucket' -Value $appBucket
     }
     $install_json | ConvertTo-Json | Set-Content $appdir/install.json
