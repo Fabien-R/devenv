@@ -1,12 +1,9 @@
 # devenv
 
-## Installation
+## The purpose
 
-In PowerShell console execute
-```
-iwr -useb 'https://raw.githubusercontent.com/stephanec1/devenv/master/bin/install.ps1' | iex
-```
-then
+After installing the devenv application (idea and original source code from https://github.com/stephanec1/devenv-bucket.git) with scoop packet manager, 
+you can upload and apply different profils/configurations to your applications (aka the devenv).
 
 ```
 devenv config apply [-Name <String>]
@@ -47,18 +44,14 @@ configuration example:
 ```
 {
     "buckets": [
-        "devenv@https://github.com/stephanec1/devenv-bucket.git"
+        "extras@https://github.com/lukesampson/scoop-extras",
+        "java@https://github.com/scoopinstaller/java"
     ],
     "apps": [
-        "devenv/devenv",
-        "7zip",
-        "git",
-        "devenv/putty",
-        "devenv/yarn"
+        "extras/winscp",
+        "maven",
+        "java/openjdk11",
     ],
-    "extras": [
-        "axway"
-    ]
 }
 
 ```
