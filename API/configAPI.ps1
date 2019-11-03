@@ -183,28 +183,32 @@ function m_applyExtra($extrasPath, $appName, [ApplyType] $type, $version, $old_v
         $appdir = appdir $appName/current
         $persist_dir = persistdir $appName
         . $extra_dir/extra.ps1
-        switch ($type) {
-            'PostInstall' {
-                onPostInstall $extra_dir $appdir $persist_dir $version
-                ; Break
-            }
-            'PreUpdate' {
-                onPreUpdate $extra_dir $appdir $persist_dir $version $old_version
-                ; Break
-            }
-            'PostUpdate' {
-                onPostUpdate $extra_dir $appdir $persist_dir $version $old_version
-                ; Break
-            }
-            'CleanUp' {
-                onCleanUp $extra_dir $appdir $persist_dir $version
-                ; Break
-            }
-            'Idem' {
-                onIdem $extra_dir $appdir $persist_dir $version
-                ; Break
-            }
-        }
+        apply $extra_dir $appdir $persist_dir
+        LogInfo "-> '$appName' extras was applied"
+
+#        switch ($type) {
+#            'PostInstall' {
+#                onPostInstall $extra_dir $appdir $persist_dir $version
+#                ; Break
+#            }
+#            'PreUpdate' {
+#                onPreUpdate $extra_dir $appdir $persist_dir $version $old_version
+#                ; Break
+#            }
+#            'PostUpdate' {
+#                onPostUpdate $extra_dir $appdir $persist_dir $version $old_version
+#                ; Break
+#            }
+#            'CleanUp' {
+#                onCleanUp $extra_dir $appdir $persist_dir $version
+#                ; Break
+#            }
+#            'Idem' {
+#                onIdem $extra_dir $appdir $persist_dir $version
+#                ; Break
+#            }
+#        }
+
     }
 }
 
