@@ -124,7 +124,8 @@ Function InstallScoopApp([String]$appSpec, [String]$extrasPath) {
             $install = install_info $appName $from_version
             $currentAppBucket = $install.bucket
             $to_version = latest_version $appName $appBucket
-            if ($appConfigName -ne $configName) {
+            # git is installed by the 'main config' because need it to download other buckets
+            if ($appConfigName -ne $configName -AND $appName -ne 'git') {
                 LogWarn "Scoop app '$( $appName )' wasn't installed by the configuration '$configName' but by the configuration '$appConfigName'. Nothing will be done on the app."
                 return
             }
